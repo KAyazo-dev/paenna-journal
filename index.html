@@ -631,12 +631,17 @@
     </div>
   </div>
 
-  <!-- MEMO -->
+  <!-- DIARY -->
   <div class="card memo-section">
-    <div class="card-title memo-title">📝 今日のメモ</div>
+    <div class="card-title memo-title">📝 冒険日記</div>
     <div class="memo-area">
-      <textarea rows="4" placeholder="今日どこを探索したか、気づいたこと、次やることなど自由に書いてね&#13;&#10;例：初めてEX+挑戦した！手形3枚もらえた。次は採掘系ミッション試したい。"></textarea>
+      <textarea id="diaryInput" rows="4" placeholder="今日どこを探索したか、気づいたこと、次やることなど自由に書いてね&#13;&#10;例：初めてEX+挑戦した！手形3枚もらえた。次は採掘系ミッション試したい。"></textarea>
+      <button id="saveDiaryBtn" style="width:100%;margin-top:10px;padding:12px;background:#0e2a35;border:2px solid #4cc9f0;border-radius:9px;color:#4cc9f0;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation;font-family:'Noto Sans JP',sans-serif;">
+        📖 今日の記録を保存する
+      </button>
     </div>
+    <!-- 過去ログ -->
+    <div id="diaryLog" style="padding:0 18px 20px;display:flex;flex-direction:column;gap:10px;"></div>
   </div>
 
 </div>
@@ -678,10 +683,8 @@ function saveData() {
     });
   });
 
-  const memo = document.querySelector('textarea') ? document.querySelector('textarea').value : '';
-
   localStorage.setItem(LS, JSON.stringify({
-    credit, fortuneCount, tegata, currentGoal, stepsState, fortuneLogs, memo
+    credit, fortuneCount, tegata, currentGoal, stepsState, fortuneLogs, diaryLogs
   }));
 }
 
@@ -690,6 +693,7 @@ let credit = 0;
 let fortuneCount = 0;
 let tegata = 0;
 let currentGoal = { name:'スペースダルメル', cost:29000 };
+let diaryLogs = []; // { date, text } の配列
 const fortuneItems = [
   { name:'パワーレスローダー', rarity:'gold' },
   { name:'ホイールローダー', rarity:'gold' },
@@ -699,6 +703,77 @@ const fortuneItems = [
   { name:'コスモターミナル', rarity:'gray' },
   { name:'コスモキッチン・パーティション', rarity:'gray' },
 ];
+
+// ===== 日記 =====
+function todayStr() {
+  const now = new Date();
+  return `${now.getFullYear()}.${(now.getMonth()+1).toString().padStart(2,'0')}.${now.getDate().toString().padStart(2,'0')}`;
+}
+
+function renderDiaryLogs() {
+  const container = document.getElementById('diaryLog');
+  container.innerHTML = '';
+  if(diaryLogs.length === 0) {
+    container.innerHTML = '<div style="font-size:13px;color:#9ab0cc;text-align:center;padding:10px 0;">まだ記録がありません</div>';
+    return;
+  }
+  // 新しい順に表示
+  [...diaryLogs].reverse().forEach(function(log, i){
+    const realIndex = diaryLogs.length - 1 - i;
+    const el = document.createElement('div');
+    el.style.cssText = 'background:#152040;border:1px solid #2a4a7f;border-radius:10px;padding:14px 16px;position:relative;';
+    el.innerHTML = `
+      <div style="font-family:'Orbitron',monospace;font-size:11px;color:#4cc9f0;margin-bottom:8px;letter-spacing:1px;">📅 ${log.date}</div>
+      <div style="font-size:13px;color:#ffffff;line-height:1.8;white-space:pre-wrap;">${log.text}</div>
+      <button data-delete-index="${realIndex}" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#9ab0cc;font-size:16px;cursor:pointer;padding:4px;touch-action:manipulation;" title="削除">🗑️</button>
+    `;
+    container.appendChild(el);
+  });
+
+  // 削除ボタン
+  container.querySelectorAll('[data-delete-index]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const idx = Number(btn.dataset.deleteIndex);
+      if(confirm('この記録を削除しますか？')) {
+        diaryLogs.splice(idx, 1);
+        renderDiaryLogs();
+        saveData();
+      }
+    });
+  });
+}
+
+function saveDiary() {
+  const input = document.getElementById('diaryInput');
+  const text = input.value.trim();
+  if(!text) {
+    input.style.borderColor = '#f87171';
+    setTimeout(()=>{ input.style.borderColor = ''; }, 1000);
+    return;
+  }
+  const today = todayStr();
+  // 同じ日付がすでにある場合は追記
+  const existing = diaryLogs.find(function(l){ return l.date === today; });
+  if(existing) {
+    existing.text += '\n\n' + text;
+  } else {
+    diaryLogs.push({ date: today, text: text });
+  }
+  input.value = '';
+  renderDiaryLogs();
+  saveData();
+  // 保存フラッシュ
+  const btn = document.getElementById('saveDiaryBtn');
+  const orig = btn.textContent;
+  btn.textContent = '✅ 保存しました！';
+  btn.style.borderColor = '#6ee7b7';
+  btn.style.color = '#6ee7b7';
+  setTimeout(()=>{
+    btn.textContent = orig;
+    btn.style.borderColor = '#4cc9f0';
+    btn.style.color = '#4cc9f0';
+  }, 1500);
+}
 
 function updateCredit(){
   document.getElementById('creditVal').textContent = credit.toLocaleString();
@@ -795,14 +870,8 @@ document.querySelectorAll('[data-tegata]').forEach(function(btn){
   btn.addEventListener('click', function(){ addTegata(Number(btn.dataset.tegata)); });
 });
 
-// ===== メモ自動保存 =====
-const memoEl = document.querySelector('textarea');
-if(memoEl){
-  memoEl.addEventListener('input', function(){
-    clearTimeout(memoEl._saveTimer);
-    memoEl._saveTimer = setTimeout(saveData, 800);
-  });
-}
+// ===== 日記保存ボタン =====
+document.getElementById('saveDiaryBtn').addEventListener('click', saveDiary);
 
 // ===== 起動時にデータ復元 =====
 (function restoreData(){
@@ -841,8 +910,11 @@ if(memoEl){
     document.getElementById('fortuneCount').textContent = fortuneCount;
   }
 
-  // メモ
-  if(d.memo && memoEl) memoEl.value = d.memo;
+  // 日記ログ
+  if(d.diaryLogs) {
+    diaryLogs = d.diaryLogs;
+  }
+  renderDiaryLogs();
 })();
 
 </script>
